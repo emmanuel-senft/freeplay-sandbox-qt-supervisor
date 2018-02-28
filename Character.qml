@@ -17,6 +17,8 @@ Item {
     property string image: "res/cube.svg"
     property int epsilon: 20
     property bool selected: false
+    property bool focused: false
+    visible: false
 
     ListenerObject {
         id: listener
@@ -36,6 +38,11 @@ Item {
             visible = true
         else
             visible = false
+    }
+
+    onVisibleChanged: {
+        if (visible == false)
+            selected=false
     }
 
     Lifebar {
@@ -88,6 +95,7 @@ Item {
 
     function resetGhost(){
         dragger.dragged = false
+        arrow.visible = false
         testDifference()
     }
 
@@ -112,9 +120,14 @@ Item {
 
         startArrow()
         actionPublisher.prepareMove(listener, dragger, name)
+        var toReturn=[]
+        toReturn.push(dragger.x)
+        toReturn.push(dragger.y)
+        return toReturn
     }
 
     function click(){
+        resetIfProposing()
         selected = !selected
     }
 
@@ -132,10 +145,6 @@ Item {
             arrow.visible = false
         }
     }
-    function cancelMove(){
-        arrow.visible = false
-        resetGhost()
-    }
     function hideArrow(){
         arrow.visible = false
     }
@@ -151,5 +160,11 @@ Item {
         onTriggered: {
             arrow.visible = true
         }
+    }
+    onFocusedChanged: {
+        if(focused)
+            circle.border.color = "darkorange"
+        else
+            circle.border.color = "cyan"
     }
 }

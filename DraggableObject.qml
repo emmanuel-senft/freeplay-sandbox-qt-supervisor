@@ -11,6 +11,7 @@ Object {
             anchors.fill: parent
             drag.target: parent
             onPressed: {
+                resetIfProposing()
                 wasSelected = character.selected
                 character.select()
                 dragged = true

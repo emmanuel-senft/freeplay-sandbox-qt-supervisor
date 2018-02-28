@@ -11,7 +11,7 @@ Window {
     id: window
 
     visible: true
-    //visibility: Window.FullScreen
+    visibility: Window.FullScreen
     //width: Screen.width
     //height: Screen.height
     width:800
@@ -20,6 +20,37 @@ Window {
     property int prevWidth:800
     property int prevHeight:600
     property var selectedItems: []
+    property var initTime: 0
+    property string focusedItem: ""
+    property string  qlogfilename: ""
+    property bool autonomous: false
+
+    Component.onCompleted: {
+        var d = new Date()
+        initTime = d.getTime()
+        qlogfilename = "foodchain-data/supervisor/" + d.toISOString().split(".")[0] + ".csv"
+    }
+
+    function updateFocus() {
+        for (var i = 0; i < characters.children.length; i++)
+            if(characters.children[i].name === focusedItem)
+                characters.children[i].focused = false
+        for (var i = 0; i < targets.children.length; i++)
+            if(targets.children[i].name === focusedItem)
+                targets.children[i].focused = false
+
+        if(selectedItems.length>0)
+            focusedItem=selectedItems[selectedItems.length-1]
+        else
+            focusedItem=""
+        console.log(focusedItem)
+        for (var i = 0; i < characters.children.length; i++)
+            if(characters.children[i].name === focusedItem)
+                characters.children[i].focused = true
+        for (var i = 0; i < targets.children.length; i++)
+            if(targets.children[i].name === focusedItem)
+                targets.children[i].focused = true
+    }
 
     onWidthChanged: {
         prevWidth=width;
@@ -86,12 +117,13 @@ Window {
     //Cancel button might not be needed (just send negative reward to suggestion)
     Rectangle{
         id: buttonCancel
-        width: zoo.width / 20
+        width: zoo.width / 15
         height: width
         radius: width/2
         anchors.left: zoo.left
         anchors.bottom: zoo.bottom
         anchors.bottomMargin: zoo.height / 20
+        anchors.leftMargin: zoo.width / 40
         color: "red"
         border.color: "black"
         border.width: width / 10
@@ -113,27 +145,27 @@ Window {
             anchors.fill: parent
             onClicked: {
                 lightningCan.start()
-                cancelAutoExe()
+                cancelAction()
             }
         }
     }
 
     Rectangle{
-        id: buttonWait
-        anchors.left: zoo.left
-        anchors.bottom: buttonCancel.top
-        anchors.bottomMargin: zoo.height / 20
-        width: zoo.width / 20
+        id: buttonRemove
+        width: zoo.width / 15
         height: width
         radius: width/2
-        z: 5
-        color: "orange"
+        anchors.right: zoo.right
+        anchors.top: buttonCancel.top
+        anchors.rightMargin: zoo.width / 40
+        color: "red"
         border.color: "black"
         border.width: width / 10
+        z: 5
         SequentialAnimation {
-            id: lightningWait
-            PropertyAnimation{target: buttonWait; property: "color"; to: "orange"; duration: 100}
-            PropertyAnimation{target: buttonWait; property: "color"; to: "gold"; duration: 100}
+            id: lightningRemove
+            PropertyAnimation{target: buttonRemove; property: "color"; to: "orange"; duration: 100}
+            PropertyAnimation{target: buttonRemove; property: "color"; to: "red"; duration: 100}
         }
         Label{
             anchors.fill: parent
@@ -141,14 +173,48 @@ Window {
             verticalAlignment: Label.AlignVCenter
             font.pixelSize: 20
             font.bold: true
-            text: "Wait"
+            text: "Remove"
         }
         MouseArea{
             anchors.fill: parent
             onClicked: {
-                lightningWait.start()
-                autoExe.stop()
-                resetSelectedItems()
+                lightningRemove.start()
+                removeAction()
+            }
+        }
+    }
+
+    Rectangle{
+        id: buttonSkip
+        anchors.left: zoo.left
+        anchors.bottom: buttonCancel.top
+        anchors.bottomMargin: zoo.height / 20
+        anchors.leftMargin: buttonCancel.anchors.leftMargin
+        width: buttonCancel.width
+        height: width
+        radius: width/2
+        z: 5
+        color: "orange"
+        border.color: "black"
+        border.width: width / 10
+        SequentialAnimation {
+            id: lightningSkip
+            PropertyAnimation{target: buttonSkip; property: "color"; to: "orange"; duration: 100}
+            PropertyAnimation{target: buttonSkip; property: "color"; to: "gold"; duration: 100}
+        }
+        Label{
+            anchors.fill: parent
+            horizontalAlignment: Label.AlignHCenter
+            verticalAlignment: Label.AlignVCenter
+            font.pixelSize: 20
+            font.bold: true
+            text: "Skip"
+        }
+        MouseArea{
+            anchors.fill: parent
+            onClicked: {
+                lightningSkip.start()
+                skipAction()
             }
         }
     }
@@ -156,9 +222,10 @@ Window {
     Rectangle{
         id: buttonDoIt
         anchors.left: zoo.left
-        anchors.bottom: buttonWait.top
+        anchors.bottom: buttonSkip.top
         anchors.bottomMargin: zoo.height / 20
-        width: zoo.width / 20
+        anchors.leftMargin: buttonCancel.anchors.leftMargin
+        width: buttonCancel.width
         height: width
         radius: width/2
         z: 5
@@ -182,21 +249,23 @@ Window {
             anchors.fill: parent
             onClicked: {
                 lightningDo.start()
-                autoExe.stop()
-                actionPublisher.executeAction()
+                if(autoExe.running){
+                    stopSuggestion()
+                    actionPublisher.executeAction("doit")
+                }
             }
         }
     }
      Grid{
         id:buttonPannel
-        anchors.left: parent.left
+        width: parent.width * 4 / 5
         anchors.bottom: parent.bottom
         height: parent.height/10
-        anchors.right: parent.right
+        anchors.horizontalCenter: parent.horizontalCenter
         horizontalItemAlignment: Grid.AlignHCenter
         verticalItemAlignment: Grid.AlignVCenter
-        columns: 8
-        rows: 2
+        columns: 5
+        rows: 1
         columnSpacing: width/20
         leftPadding: columnSpacing
         rightPadding: columnSpacing
@@ -232,7 +301,7 @@ Window {
             width: parent.cellSize
             height: parent.height/2
             text: "Select"
-            visible: true
+            visible: false
             onClicked: {
                 sparcEventPublisher.text = "select"
             }
@@ -243,13 +312,9 @@ Window {
             text: "Reset"
             visible: true
             onClicked: {
-                for (var i = 0; i < characters.children.length; i++){
-                    characters.children[i].selected = false
-                    characters.children[i].resetGhost()
-                }
-                for (var i = 0; i < targets.children.length; i++){
-                    targets.children[i].selected = false
-                }
+                resetSelectedItems()
+                resetGhosts()
+                sandtrayEventPublisher.text="reset"
             }
         }
         Button{
@@ -258,12 +323,9 @@ Window {
             text: "Draw attention"
             visible: true
             onClicked: {
-                if(selectedItems.length > 1){
-                    informationText.text="Only one item can be selected."
-                    showInfoDisplay.start()
-                }
-                else if(selectedItems.length < 1){
-                    informationText.text="Select one item."
+                stopSuggestion()
+                if(focusedItem === ""){
+                    informationText.text="Please have an item focused"
                     showInfoDisplay.start()
                 }
                 else {
@@ -277,6 +339,7 @@ Window {
             text: "Congratulations"
             visible: true
             onClicked: {
+                resetIfProposing()
                 actionPublisher.congratulate()
             }
         }
@@ -286,6 +349,7 @@ Window {
             text: "Encouragement"
             visible: true
             onClicked: {
+                resetIfProposing()
                 actionPublisher.encourage()
             }
         }
@@ -295,6 +359,7 @@ Window {
             text: "Remind Rules"
             visible: true
             onClicked: {
+                resetIfProposing()
                 actionPublisher.remindRules()
             }
         }
@@ -385,7 +450,7 @@ Window {
         z: 5
         Label {
             id: informationText
-            font.pixelSize: 30
+            font.pixelSize: 35
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
             horizontalAlignment: Text.AlignHCenter
@@ -394,14 +459,21 @@ Window {
         SequentialAnimation {
             id:showInfoDisplay
             PropertyAnimation{target: infoDisplay; property: "opacity"; to: 1; duration: 100}
-            PropertyAnimation{target: infoDisplay; property: "opacity"; to: 0; duration: 3000}
+            PropertyAnimation{target: infoDisplay; property: "color"; to: "green"; duration: autoExe.interval-500}
+            PropertyAnimation{target: infoDisplay; property: "opacity"; to: 0; duration: 1}
+            PropertyAnimation{target: infoDisplay; property: "color"; to: "AliceBlue"; duration: 1}
         }
     }
 
     Timer {
         id: autoExe
-        interval: 3000; running: false; repeat: false
-        onTriggered:{actionPublisher.executeAction()}
+        interval: 2000; running: false; repeat: false
+        onTriggered:{
+            if(!autonomous)
+                actionPublisher.executeAction("autoexe")
+            else
+                resetSelectedItems()
+        }
     }
 
     RosActionPublisher {
@@ -413,11 +485,14 @@ Window {
         type: "mv"
         topic: "sparc/selected_action"
         reward: 1
+        property double lastMove: -3000
         function updateList(){
             strings.splice(0,strings.length)
             for(var i=0;i<selectedItems.length;i++){
                 strings.push(selectedItems[i])
             }
+            if(look.selected)
+                strings.push("looking")
         }
         function prepareMove(listener, dragger, name){
             updateList()
@@ -426,19 +501,36 @@ Window {
             frame = name
             type = "mv"
         }
-        function executeAction(){
-            if(type.startsWith("mv"))
-                for (var i = 0; i < characters.children.length; i++)
-                    if(characters.children[i].name === frame){
-                        characters.children[i].hideArrow()
-                        break
-                    }
-            reward = 1
+        function logAction(selectionType){
+            var tolog=selectionType + ","
+            if(type.startsWith("mv")){
+                tolog = tolog+"mv_"+frame+"_"+Math.round(target.x)+"_"+Math.round(target.y)
+            }
+            else{
+                tolog = tolog + type
+                if(type == "att")
+                    tolog = tolog + "_"+frame
+            }
+            tolog=tolog+","+reward+","+[strings]
+            log(tolog)
+        }
+
+        function executeAction(selectionType){
+            for (var i = 0; i < characters.children.length; i++)
+                characters.children[i].hideArrow()
             publish()
+            logAction(selectionType)
+            resetSelectedItems()
+            reward = 1
+            timerResetState.restart()
         }
         function makeMove(listener, dragger, name){
-            prepareMove(listener, dragger, name)
-            executeAction()
+            var t = new Date().getTime()
+            if(t-lastMove>2500){
+                lastMove=t
+                prepareMove(listener, dragger, name)
+                executeAction("select")
+            }
         }
 
         function prepareAttention(item){
@@ -454,35 +546,39 @@ Window {
         }
 
         function drawAttention(){
-            if(selectedItems.length !==1)
+            if(focusedItem === "")
                 return
-            prepareAttention(selectedItems[0])
-            executeAction()
+            prepareAttention(focusedItem)
+            executeAction("select")
         }
 
         function congratulate() {
             prepareOther("congrats")
-            executeAction()
+            executeAction("select")
         }
 
         function encourage() {
             prepareOther("encour")
-            executeAction()
+            executeAction("select")
 
         }
 
         function remindRules() {
             prepareOther("rul")
-            executeAction()
+            executeAction("select")
 
         }
         function cancelAction(){
             reward = -1
-            publish()
+            executeAction("cancel")
         }
-        function wait(){
-            reward = 0
-            publish()
+        function removeAction(){
+            reward = -10
+            executeAction("remove")
+        }
+
+        function skipAction(){
+            logAction("skip")
         }
     }
 
@@ -498,7 +594,7 @@ Window {
         //property double physicalMapWidth: 553 //mm (desktop acer monitor)
         property double physicalMapWidth: 600 //mm (sandtray)
         property double physicalCubeSize: 30 //mm
-        property double pixel2meter: (physicalMapWidth / 1000) / parent.width
+        property double pixel2meter: (physicalMapWidth / 1000) / map.paintedWidth
 
         property bool showRobotChild: false
         property bool publishRobotChild: false
@@ -506,23 +602,12 @@ Window {
         Image {
             id: map
             fillMode: Image.PreserveAspectFit
-            height: parent.height
+            //height: parent.height
             width: parent.width
             anchors.left: parent.left
             anchors.top: parent.top
-            source: "image://rosimage/sandtray/background/image"
+            source: "res/map.svg"
             cache: false
-            Timer {
-                id: imageLoader
-                interval: 100
-                repeat: true
-                running: true
-                onTriggered: {
-                    map.source = "";
-                    map.source = "image://rosimage/sandtray/background/image";
-                    interval = 5000
-                }
-            }
 
             Item {
                 // this item sticks to the 'visual' origin of the map, taking into account
@@ -550,6 +635,40 @@ Window {
                 anchors.top: parent.top
                 color: "#555"
 
+            }
+        }
+
+        Rectangle{
+            id: look
+            height: parent.height /10
+            width: parent.width /10
+            anchors.right: parent.right
+            anchors.rightMargin: height/10
+            anchors.top: parent.top
+            anchors.topMargin: height/10
+            color: "transparent"
+            border.color: "transparent"
+            border.width: height/20
+            property bool selected: false
+            property string source: "res/other.png"
+            MouseArea{
+                anchors.fill: parent
+                onClicked: {
+                    parent.selected = !parent.selected
+                }
+            }
+
+            Image {
+                anchors.fill: parent
+                anchors.margins: width/20
+                fillMode: Image.PreserveAspectFit
+                source: parent.source
+                }
+            onSelectedChanged: {
+                if(selected)
+                    border.color = "cyan"
+                else
+                    border.color = "transparent"
             }
         }
 
@@ -725,8 +844,15 @@ Window {
                 if(list[0] === "robotrelease")
                    releaseRobot(list[1]);
 
-                if(list[0] === "stop")
-                    autoExe.stop()
+                if(list[0] === "endround"){
+                    stopSuggestion()
+                    for (var i = 0; i < characters.children.length; i++)
+                        characters.children[i].visible = false
+                        for (var i = 0; i < targets.children.length; i++)
+                            targets.children[i].visible = false
+                        var tolog ="endround"
+                        log(tolog)
+                }
 
                 if(list[0] === "characters" && !characters.initialised){
                     for(var i=1;i<list.length;i++){
@@ -760,9 +886,30 @@ Window {
                         if (characters.children[i].name === list[1])
                             characters.children[i].selected=false
                     }
-
                 }
+                if(list[0] === "record"){
+                    if(list[2] === "autonomous"){
+                        autonomous = true
+                    }
+                    else{
+                        autonomous = false
+                        autoExe.interval = 2000
+                    }
 
+
+                    var d = new Date()
+                    initTime = d.getTime()
+                    qlogfilename = "foodchain-data/supervisor/condition-" +list[1]+"-"+list[2]+"/"+ d.toISOString().split(".")[0] + ".csv"
+                    console.log(qlogfilename)
+                }
+                if(list[0] === "start"){
+                    var tolog ="start,"+list[1]+","+list[2]
+                    log(tolog)
+                }
+                if(list[0] === "looking"){
+                    look.source = "res/"+list[1]+".png"
+                    look.selected = false
+                }
             }
         }
 
@@ -837,7 +984,6 @@ Window {
 
     function releaseRobot(item){
         robot_hand.visible = false
-        resetSelectedItems()
         for (var i = 0; i < characters.children.length; i++)
             if(characters.children[i].name === item){
                 characters.children[i].resetGhost()
@@ -859,14 +1005,21 @@ Window {
     RosActionSubscriber {
         id: actionSubscriber
         pixelscale: zoo.pixel2meter
-        origin: mapOrigin
+        origin: zoo
         topic: "sparc/proposed_action"
 
         onActionReceived:{
-            //if(selectedItems.length != 0)
-            //    return
+            if(selectedItems.length != 0)
+                return
+
+            var tolog ="proposed,"
 
             for (var i = 0;i<strings.length;i++){
+                if(strings[i]==="looking"){
+                    look.selected = true
+                    continue
+                }
+
                 for (var j = 0; j < characters.children.length; j++){
                     if(characters.children[j].name === strings[i]){
                         characters.children[j].select()
@@ -881,9 +1034,10 @@ Window {
                 }
             }
             if(type.startsWith("mv")){
+                var newPose
                 for (var j = 0; j < characters.children.length; j++){
                     if(characters.children[j].name === frame){
-                        characters.children[j].setDraggerPose(x,y,z)
+                        newPose = characters.children[j].setDraggerPose(x,y,z)
                     }
                     if(strings.indexOf(characters.children[j].name)>-1){
                         characters.children[j].selected = true
@@ -894,37 +1048,51 @@ Window {
                     direction = " close to "
                 if(type.startsWith("mva"))
                     direction = " away from "
-
                 informationText.text="Move "+ type.split("_")[1] + direction + type.split("_")[2]+"."
                 showInfoDisplay.start()
+                tolog = tolog+type+"_"+Math.round(newPose[0])+"_"+Math.round(newPose[1])
             }
-            if(type == "att"){
+            else if(type == "att"){
                 informationText.text="Drawing attention to "+ frame +"."
+                focusedItem = frame
                 showInfoDisplay.start()
                 actionPublisher.prepareAttention(frame)
+                tolog = tolog+"att_"+frame
             }
-            if(type == "congrats"){
-                informationText.text="Congratulations."
-                showInfoDisplay.start()
-                actionPublisher.prepareOther("congrats")
+            else{
+                tolog = tolog + type
+                if(type == "congrats"){
+                    informationText.text="Congratulations."
+                    showInfoDisplay.start()
+                    actionPublisher.prepareOther("congrats")
+                }
+                if(type == "encour"){
+                    informationText.text="Encouragement."
+                    showInfoDisplay.start()
+                    actionPublisher.prepareOther("encour")
+                }
+                if(type == "rul"){
+                    informationText.text="Remind rules."
+                    showInfoDisplay.start()
+                    actionPublisher.prepareOther("rul")
+                }
             }
-            if(type == "encour"){
-                informationText.text="Encouragement."
-                showInfoDisplay.start()
-                actionPublisher.prepareOther("encour")
-            }
-            if(type == "rul"){
-                informationText.text="Remind rules."
-                showInfoDisplay.start()
-                actionPublisher.prepareOther("rul")
-            }
-            //autoExe.start()
+            tolog += ","+reward+","+[strings]
+            log(tolog)
+            autoExe.start()
         }
+
     }
     RosListFloatSubscriber{
         id: lifeSubscriber
         topic: "sparc/life"
         onListChanged:{
+            for (var j = 0; j < targets.children.length; j++){
+                if (list[j] == 0)
+                    targets.children[j].visible = false
+                else
+                    targets.children[j].visible = true
+            }
             for (var j = 0; j < characters.children.length; j++){
                 characters.children[j].life = list[j+targets.children.length]
             }
@@ -940,22 +1108,33 @@ Window {
         statePanel.reset()
     }
     function resetSelectedItems(){
+        timerResetState.stop()
         for (var j = 0; j < characters.children.length; j++)
             characters.children[j].selected = false
         for (var j = 0; j < targets.children.length; j++)
             targets.children[j].selected = false
+        look.selected = false
+    }
+
+    function resetGhosts(){
+        for (var j = 0; j < characters.children.length; j++)
+            characters.children[j].resetGhost()
     }
 
     function addSelectedItem(name){
-        autoExe.stop()
+        timerResetState.stop()
+        stopSuggestion()
         selectedItems.push(name)
+        updateFocus()
     }
     function removeSelectedItem(name){
-        autoExe.stop()
+        timerResetState.stop()
+        stopSuggestion()
         var index = selectedItems.indexOf(name)
         if (index>-1){
             selectedItems.splice(index,1)
         }
+        updateFocus()
     }
     function showReward(type){
         if (type === "pos"){
@@ -967,17 +1146,50 @@ Window {
             showNegReward.start()
         }
     }
-    function cancelAutoExe(){
-        autoExe.stop()
+    function cancelAction(){
+        stopSuggestion()
         actionPublisher.cancelAction()
         sandtrayEventPublisher.text = "sup_act_cancel"
-
-        if(actionPublisher.type.startsWith("mv")){
-            for (var i = 0; i < characters.children.length; i++)
-                if(characters.children[i].name === actionPublisher.frame){
-                    characters.children[i].cancelMove()
-                }
-        }
         resetSelectedItems()
+        resetGhosts()
+    }
+    function removeAction(){
+        stopSuggestion()
+        actionPublisher.removeAction()
+        sandtrayEventPublisher.text = "sup_act_remove"
+        resetSelectedItems()
+        resetGhosts()
+    }
+    function skipAction(){
+        stopSuggestion()
+        actionPublisher.skipAction()
+        sandtrayEventPublisher.text = "sup_act_skip"
+        resetSelectedItems()
+        resetGhosts()
+    }
+    function stopSuggestion(){
+        autoExe.stop()
+        infoDisplay.opacity = 0
+    }
+    function log(string){
+        var d = new Date()
+        var log = [d.getTime()-initTime, string]
+        fileio.write(window.qlogfilename, log.join(","));
+    }
+    function resetIfProposing(){
+        if(autoExe.running){
+            actionPublisher.logAction("press")
+            stopSuggestion()
+            resetSelectedItems()
+            resetGhosts()
+        }
+    }
+
+    Timer{
+        id: timerResetState
+        interval: 2000
+        repeat: false
+        running: false
+        onTriggered: resetSelectedItems()
     }
 }

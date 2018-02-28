@@ -13,6 +13,9 @@ Item {
     property string image: "res/cube.svg"
     property int epsilon: 20
     property bool selected: false
+    property bool focused: false
+    visible: false
+
     ListenerObject {
         id: listener
         name: parent.name
@@ -20,6 +23,11 @@ Item {
         property double scale: 1.0
         property double bbScale: 1.0
         width: parent.width
+    }
+
+    onVisibleChanged: {
+        if (visible == false)
+            selected=false
     }
 
     Rectangle{
@@ -51,5 +59,12 @@ Item {
         else{
             removeSelectedItem(name)
         }
+    }
+
+    onFocusedChanged: {
+        if(focused)
+            circle.border.color = "darkorange"
+        else
+            circle.border.color = "cyan"
     }
 }
